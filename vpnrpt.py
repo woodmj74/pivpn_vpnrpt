@@ -11,15 +11,15 @@ from datetime import datetime
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
 # -----------------------------
-# --- CONFIGURATION OPTIONS ---
+# --- CONFIGURATION OPTIONS --- << UPDATE THIS SECTION <<
 # -----------------------------
 
-discoveryTopicPrefix = 'homeassistant/sensor/'
-topicPrefix = 'home/nodes/sensor/'                  # [clientname]/suffix (state /state, attributes /attr, availability /status)
+discoveryTopicPrefix = 'homeassistant/sensor/pivpn/'
+topicPrefix = 'home/nodes/sensor/pivpn/'            
 vpnType = 'WireGuard'                               # WireGuard or OpenVPN or other?
-mqttUser = 'homeassistant'
-mqttPassword = 'Phei1ja3ahHe2hee3tue2ahx4afaep9liepohcheinie7thohzoz4yae2but4aij'
-mqttAddress = '192.168.10.84'                       # assumes standard ports
+mqttUser = 'homeassistant'                          #
+mqttPassword = 'PASSWORD'                           #
+mqttAddress = 'IP'                                  # assumes standard ports
 updateFrequency = 1                                 # in minutes
 
 # ---------------------------------
@@ -31,9 +31,9 @@ updateFrequency = 1                                 # in minutes
 def on_connect(client, userdata, flags, rc):
     logging.debug('--> on_connect')
     logging.info('Connected with result code '+str(rc))
-##??    stateTopic = '{}status'.format(topicPrefix)     # publish status update
-##??    client.publish(stateTopic, payload='Online', qos=0, retain=True) 
-    for client in clientList:                       # call discovery for each device
+    stateTopic = '{}status'.format(topicPrefix)     
+    client.publish(stateTopic, payload='online', qos=0, retain=True) 
+    for client in clientList:                      
         publishDiscovery(client)
 
 # Timer based on update frequency
@@ -51,14 +51,14 @@ def periodTimeoutHandler():
         removedClients = [i for i in clientList if i not in updatedClientList]
         logging.info('Removed Clients')
         logging.info(removedClients)
-        for clientName in newClients:               # Create discovery data for new devices
+        for clientName in newClients:               # Create discovery data for new clients
             publishDiscovery(clientName)
-        for clientName in removedClients:            # Remove HA entity/device for removed devices
+        for clientName in removedClients:           # Remove HA entity for removed clients
             removeDiscovery(clientName)
     else:
         logging.info('Client lists are the same')
-    clientList = updatedClientList                  # Update the device list
-    publishClientAttributes()                       # Call to publish the attributes for each device
+    clientList = updatedClientList                  # Update the client list
+    publishClientAttributes()                       # Call to publish the attributes for each client
     startPeriodTimer()
 
 def startPeriodTimer():
@@ -103,9 +103,9 @@ def publishDiscovery(clientName):
     payload['name'] = 'VPN Client {}'.format(clientName.title())
     payload['unique_id'] = 'VPN{}{}Client'.format(vpnType, clientName)
     payload['state_topic'] = '{}{}/state'.format(topicPrefix, clientName)
-    payload['payload_available'] = 'Online'
-    payload['payload_not_available'] = 'Offline'
-    payload['availability_topic'] = '{}{}/status'.format(topicPrefix, clientName)
+    #payload['payload_available'] = 'Online'
+    #payload['payload_not_available'] = 'Offline'
+    payload['availability_topic'] = '{}status'.format(topicPrefix)
     payload['icon'] = 'mdi:vpn'
     payload['json_attributes_topic'] = '{}{}/attr'.format(topicPrefix, clientName)
     payload['dev'] = {
@@ -115,25 +115,19 @@ def publishDiscovery(clientName):
         }
     client.publish(discoveryTopic, json.dumps(payload), 0, retain=True)
 
-    stateTopic = '{}{}/status'.format(topicPrefix, clientName)     # set last will
-    client.will_set(stateTopic, payload='Offline', qos=0, retain=True) 
-
-    stateTopic = '{}{}/status'.format(topicPrefix, clientName)     # publish status update
-    client.publish(stateTopic, payload='Online', qos=0, retain=True) 
-
-# Remove discovery data for deleted devices
+# Remove discovery data for deleted clients
 def removeDiscovery(clientName):
     logging.debug('--> publishDiscovery(' + clientName + ')')
     discoveryTopic = '{}{}/config'.format(discoveryTopicPrefix, clientName)
     payload = {}
     client.publish(discoveryTopic, json.dumps(payload), 0, retain=True)
 
-# Publish attribute data for devices
+# Publish attribute data for clients
 def publishClientAttributes():
     logging.debug('--> publishClientAttributes')
     for clientName in clientList:
         logging.info('Getting client attributes for ' + clientName)
-        query = "pivpn -c | grep '" + clientName + "'"          # Get device row data
+        query = "pivpn -c | grep '" + clientName + "'"          # Get client row data
         clientRecord = os.popen(query).read().split()
         if clientRecord[5]=="(not":
             data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]})
@@ -162,9 +156,9 @@ reported_first_time = False
 client = mqtt.Client()
 client.on_connect = on_connect
 client.username_pw_set(username=mqttUser,password=mqttPassword)
+stateTopic = '{}status'.format(topicPrefix)     # set last will
+client.will_set(stateTopic, payload='offline', qos=0, retain=True) 
 client.connect(mqttAddress, 1883, 60)
-##??????? stateTopic = '{}status'.format(topicPrefix)     # set last will
-##???????? client.will_set(stateTopic, payload='Offline', qos=0, retain=True) 
 
 # Commence Timer & get initial device list
 clientList = getClientList()
