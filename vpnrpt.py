@@ -16,11 +16,11 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(me
 
 discoveryTopicPrefix = 'homeassistant/sensor/pivpn/'
 topicPrefix = 'home/nodes/sensor/pivpn/'            
-vpnType = 'WireGuard'                               # WireGuard or OpenVPN or other?
-mqttUser = 'homeassistant'                          #
-mqttPassword = 'PASSWORD'                           #
-mqttAddress = 'IP'                                  # assumes standard ports
-updateFrequency = 1                                 # in minutes
+vpnType = '## VPNTYPE ##'                               # >>>> MUST BE EITHER 'WireGuard' or 'OpenVPN', CASE SENSITIVE <<<<
+mqttUser = 'homeassistant'                              #
+mqttPassword = '## PASSWORD ##'                         #
+mqttAddress = '## IP ADDRESS ##'                        # assumes standard ports
+updateFrequency = 1                                     # in minutes
 
 # ---------------------------------
 # --- END CONFIGURATION OPTIONS ---
@@ -66,7 +66,7 @@ def startPeriodTimer():
     global endPeriodTimer
     global periodTimeRunningStatus
     stopPeriodTimer()
-    endPeriodTimer = threading.Timer(updateFrequency * 30.0, periodTimeoutHandler)
+    endPeriodTimer = threading.Timer(updateFrequency * 60.0, periodTimeoutHandler)
     endPeriodTimer.start()
     periodTimeRunningStatus = True
     logging.info('Timer Started')
@@ -83,17 +83,32 @@ def stopPeriodTimer():
 def getClientList():
     logging.debug('--> getClientList')
     rawClients = os.popen("pivpn -l").read().split()
-    clientCount = (len(rawClients) - 9) / 7
-    x = 0
-    namePosition = 9
-    clientList = []
-    while x < clientCount:
-        clientName = rawClients[namePosition]
-        logging.info('Appending client ' + clientName + ' to clientList')
-        clientList.append(clientName)
-        x += 1
-        namePosition += 7
-    return clientList   
+    if vpnType == 'WireGuard':
+        clientCount = (len(rawClients) - 9) / 7
+        x = 0
+        namePosition = 9
+        clientList = []
+        while x < clientCount:
+            clientName = rawClients[namePosition]
+            logging.info('Appending client ' + clientName + ' to clientList')
+            clientList.append(clientName)
+            x += 1
+            namePosition += 7
+        return clientList   
+    if vpnType == 'OpenVPN':
+        clientCount = (len(rawClients) - 27) / 5
+        x = 0
+        namePosition = 28
+        clientList = []
+        while x < clientCount:
+            clientName = rawClients[namePosition]
+            logging.info('Appending client ' + clientName + ' to clientList')
+            clientList.append(clientName)
+            x += 1
+            namePosition += 5
+        return clientList  
+        
+
 
 # Publish discovery data for a client
 def publishDiscovery(clientName):
@@ -129,12 +144,20 @@ def publishClientAttributes():
         logging.info('Getting client attributes for ' + clientName)
         query = "pivpn -c | grep '" + clientName + "'"          # Get client row data
         clientRecord = os.popen(query).read().split()
-        if clientRecord[5]=="(not":
-            data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]})
-            state = clientRecord[5] + ' ' + clientRecord[6]
-        else:
-            data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]+' '+clientRecord[7]+' '+clientRecord[8]+' '+clientRecord[9]})
-            state = clientRecord[5] + ' ' + clientRecord[6] + ' ' + clientRecord[7] + ' ' + clientRecord[8] + ' ' + clientRecord[9]
+        if vpnType == 'WireGuard':
+            if clientRecord[5]=="(not":
+                data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]})
+                state = clientRecord[5] + ' ' + clientRecord[6]
+            else:
+                data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]+' '+clientRecord[7]+' '+clientRecord[8]+' '+clientRecord[9]})
+                state = clientRecord[5] + ' ' + clientRecord[6] + ' ' + clientRecord[7] + ' ' + clientRecord[8] + ' ' + clientRecord[9]
+        if vpnType == 'OpenVPN':
+            if len(clientRecord) == 0:
+                data = ({"client":clientName, "remote_ip":"", "local_ip":"", "received":"", "sent":"", "seen":""})
+                state = "Not Connected"
+            else:
+                data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "virtual_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "connected_since":clientRecord[5]+' '+clientRecord[6]+' '+clientRecord[7]+' '+clientRecord[8]+' '+clientRecord[9]})
+                state = clientRecord[5]+' '+clientRecord[6]+' '+clientRecord[7]+' '+clientRecord[8]+' '+clientRecord[9]
         logging.info('Client attributes...')
         logging.info(data)
         logging.info('Client state...')
