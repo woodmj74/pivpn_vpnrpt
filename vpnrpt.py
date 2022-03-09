@@ -84,7 +84,7 @@ def getClientList():
     logging.debug('--> getClientList')
     rawClients = os.popen("pivpn -l").read().split()
     if vpnType == 'WireGuard':
-        clientCount = (len(rawClients) - 9) / 7
+        clientCount = (len(rawClients) - 13) / 7
         x = 0
         namePosition = 9
         clientList = []
