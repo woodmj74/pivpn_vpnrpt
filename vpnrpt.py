@@ -82,24 +82,27 @@ def stopPeriodTimer():
 # Get VPN Client List
 def getClientList():
     logging.debug('--> getClientList')
-    rawClients = os.popen("pivpn -l").read().split()
+    clientList = []
+    rawClients = os.popen("pivpn -c").read().split()
     if vpnType == 'WireGuard':
-        clientCount = (len(rawClients) - 13) / 7
-        x = 0
-        namePosition = 9
-        clientList = []
-        while x < clientCount:
-            clientName = rawClients[namePosition]
-            logging.info('Appending client ' + clientName + ' to clientList')
-            clientList.append(clientName)
-            x += 1
-            namePosition += 7
+        del rawClients[0:16]
+        while len(rawClients) > 0:
+            if rawClients[0] == ':::':
+                del rawClients[0:4]
+            elif rawClients[0] == '[disabled]':
+                clientList.append(rawClients[1])
+                del rawClients[0:2]
+            else:
+                clientList.append(rawClients[0])
+                if rawClients[5] == "(not":
+                    del rawClients[0:7]
+                else:
+                    del rawClients[0:10]
         return clientList   
     if vpnType == 'OpenVPN':
         clientCount = (len(rawClients) - 27) / 5
         x = 0
         namePosition = 28
-        clientList = []
         while x < clientCount:
             clientName = rawClients[namePosition]
             logging.info('Appending client ' + clientName + ' to clientList')
@@ -145,7 +148,10 @@ def publishClientAttributes():
         query = "pivpn -c | grep '" + clientName + "'"          # Get client row data
         clientRecord = os.popen(query).read().split()
         if vpnType == 'WireGuard':
-            if clientRecord[5]=="(not":
+            if clientRecord[0] == "[disabled]":
+                data = json.dumps({"client":clientRecord[1], "remote_ip":"disabled", "local_ip":"disabled", "received":"disabled", "sent":"disabled", "seen":"disabled"})
+                state = "disabled"
+            elif clientRecord[5]=="(not":
                 data = json.dumps({"client":clientRecord[0], "remote_ip":clientRecord[1], "local_ip":clientRecord[2], "received":clientRecord[3], "sent":clientRecord[4], "seen":clientRecord[5]+' '+clientRecord[6]})
                 state = clientRecord[5] + ' ' + clientRecord[6]
             else:
